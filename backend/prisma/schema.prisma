@@ -1,0 +1,110 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Rol de un usuario dentro de una organización (RBAC básico).
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+/// Cuenta de usuario. No pertenece directamente a una organización:
+/// la relación se modela a través de Membership para soportar
+/// que una misma persona participe en varias organizaciones.
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships   Membership[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+/// Organización (tenant). Toda entidad de negocio futura (datasets,
+/// dashboards, etc.) debe colgar, directa o indirectamente, de una
+/// organización para mantener el aislamiento por tenant.
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  auditLogs   AuditLog[]
+
+  @@map("organizations")
+}
+
+/// Relación usuario-organización con un rol asociado. Es el punto
+/// central para RBAC: cada request autenticado debe resolver su
+/// Membership para saber qué puede hacer en esa organización.
+model Membership {
+  id             String         @id @default(uuid())
+  role           MembershipRole @default(MEMBER)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("memberships")
+}
+
+/// Refresh tokens emitidos para sesiones de autenticación. Se guarda
+/// el hash, nunca el token en claro, y se soporta revocación explícita
+/// para poder cerrar sesión o invalidar tokens comprometidos.
+model RefreshToken {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Registro de auditoría mínimo: quién hizo qué, cuándo y sobre qué
+/// organización/recurso. Se amplía a medida que se agreguen más
+/// acciones de negocio (carga de datasets, publicación de dashboards, etc.).
+model AuditLog {
+  id             String   @id @default(uuid())
+  action         String
+  targetType     String
+  targetId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  actorUserId    String?
+  actor          User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}
