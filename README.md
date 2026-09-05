@@ -100,6 +100,21 @@ Organización
 
 Entidades transversales: auditoría, permisos, tareas de procesamiento y configuraciones de transformación.
 
+## Stack tecnológico
+
+> Propuesta inicial, sujeta a revisión conforme avance el diseño técnico.
+
+| Capa | Tecnología | Justificación |
+| --- | --- | --- |
+| Frontend | Next.js (React) + TypeScript | SSR/SSG para carga inicial rápida, buen soporte para dashboards interactivos y mismo lenguaje que el backend. |
+| Backend / API | NestJS (Node.js) + TypeScript | Arquitectura modular por diseño, alineada con los límites de servicio propuestos; comparte tipos con el frontend. |
+| Base transaccional | PostgreSQL | Aislamiento multi-tenant vía row-level security, tipos JSONB para metadatos flexibles y madurez operativa. |
+| Cola y workers de procesamiento | Redis + BullMQ | Procesamiento asíncrono de importación/validación con reintentos, prioridades y observabilidad simples de implementar. |
+| Almacenamiento de objetos | S3 o compatible (MinIO en desarrollo) | Estándar de facto para archivos originales y artefactos generados, con URLs firmadas y acceso temporal. |
+| Capa analítica | PostgreSQL (vistas materializadas) en el MVP; evaluar ClickHouse o DuckDB al escalar | Mantiene el MVP simple sin bloquear una futura migración de solo la capa analítica. |
+| Autenticación | Sesiones basadas en JWT + hashing con Argon2 | Estándar de la industria, evita dependencias externas obligatorias en el MVP. |
+| Infraestructura y entornos | Docker y Docker Compose para desarrollo; despliegue en contenedores | Consistencia entre entornos y portabilidad hacia el proveedor cloud que se elija. |
+
 ## Convenciones de desarrollo
 
 - Usar ramas cortas con el prefijo `codex/` y mensajes de commit imperativos y descriptivos.
@@ -111,7 +126,7 @@ Entidades transversales: auditoría, permisos, tareas de procesamiento y configu
 
 ## Próximos pasos
 
-1. Definir el stack tecnológico y los límites de cada módulo.
+1. Validar el stack tecnológico propuesto y afinar los límites de cada módulo.
 2. Diseñar el esquema inicial de identidad, organizaciones y permisos.
 3. Implementar el flujo de autenticación y el modelo multi-tenant.
 4. Construir la primera carga CSV con perfilado básico.
