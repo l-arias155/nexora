@@ -1,9 +1,17 @@
-node_modules
-# Keep environment variables out of version control
+# Entornos, secretos y artefactos locales.
 .env
-
-/src/generated/prisma
-/dist
-/coverage
+.venv/
+node_modules/
+src/generated/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
 

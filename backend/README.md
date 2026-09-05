@@ -1,97 +1,60 @@
-# Nexora — Backend
+# Nexora API
 
-API en NestJS + TypeScript (ESM) con Prisma/PostgreSQL. Implementa la base de
-identidad, organizaciones (multi-tenant) y autenticación descrita en el
-[README del proyecto](../README.md).
+Backend de Nexora en **Python 3.12 + FastAPI**. Gestiona organizaciones y permisos multi-tenant, usa **Supabase Auth** como proveedor de identidad, PostgreSQL de Supabase mediante **SQLAlchemy/Alembic**, y Supabase Storage para los archivos privados de clientes.
 
-## Qué hay implementado
+## Arquitectura
 
-- **Auth** (`src/auth`): registro, login, refresh con rotación y logout.
-  Access token JWT de corta duración + refresh token opaco (hash SHA-256 en
-  base de datos, nunca en claro).
-- **Organizaciones** (`src/organizations`): creación de organización (el
-  creador queda como `OWNER`), listado de "mis organizaciones", listado de
-  miembros e invitación de un usuario existente con un rol.
-- **RBAC multi-tenant** (`src/common/guards/membership.guard.ts`): toda ruta
-  con `:organizationId` puede protegerse con `MembershipGuard` +
-  `@Roles(...)` para exigir pertenencia a la organización y, opcionalmente,
-  un rol mínimo.
-- **Auditoría mínima** (`AuditLog` en el esquema): se registran altas de
-  usuario, login y creación de organización.
+- `app/api`: rutas HTTP y dependencias de autenticación/autorización.
+- `app/models`: entidades SQLAlchemy y reglas de persistencia.
+- `app/services`: adaptadores hacia Supabase.
+- `app/workers`: tareas Celery para procesamiento fuera del request.
+- `alembic`: migraciones versionadas de las tablas propias de Nexora.
 
-Lo que falta (siguientes pasos naturales): datasets, carga de archivos,
-dashboards — todo lo que cuelga de una organización ya puede apoyarse en
-`MembershipGuard`.
-
-## Requisitos
-
-- Node.js 22+ (probado con 24).
-- PostgreSQL accesible (local o remoto).
+Supabase Auth conserva contraseñas y sesiones. La tabla local `users` es solo un perfil sincronizado con `auth.users`; organizaciones, membresías, datasets y auditoría son datos propios de Nexora.
 
 ## Configuración
 
 ```bash
 cp .env.example .env
+python -m venv .venv
+.venv\\Scripts\\activate  # Windows PowerShell
+pip install -e ".[dev]"
 ```
 
-Completa `DATABASE_URL` con las credenciales de tu Postgres local y genera un
-`JWT_ACCESS_SECRET` propio:
+Completa `DATABASE_URL`, `DATABASE_MIGRATION_URL` y las tres variables de Supabase en `.env`. No subas ese archivo. Crea en Supabase un bucket privado llamado `raw-data` (o cambia `SUPABASE_STORAGE_BUCKET`).
+
+## Ejecutar
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+alembic upgrade head
+fastapi dev app/main.py
 ```
 
-## Levantar Postgres
+La API queda en `http://localhost:8000/api`; la documentación interactiva está en `http://localhost:8000/docs`.
 
-Con Docker (una vez que tengas Docker Desktop + WSL2 activos, ver
-`../docker-compose.yml`):
+Para ejecutar infraestructura y servicios en contenedores:
 
 ```bash
-docker compose -f ../docker-compose.yml up -d postgres
+docker compose up --build
 ```
 
-O usa una instancia de PostgreSQL nativa ya instalada — solo ajusta
-`DATABASE_URL`.
+## Endpoints iniciales
 
-## Migraciones
+| Método | Ruta | Descripción |
+| --- | --- | --- |
+| GET | `/api/health` | Estado de la API. |
+| POST | `/api/organizations` | Crea una organización; el creador queda como `OWNER`. |
+| GET | `/api/organizations` | Lista las organizaciones del usuario autenticado. |
+| GET | `/api/organizations/{id}/members` | Lista miembros de una organización autorizada. |
+| POST | `/api/organizations/{id}/members` | Añade un usuario existente de Supabase Auth. |
+| POST | `/api/organizations/{id}/datasets/uploads` | Genera URL temporal para cargar CSV/XLSX al bucket privado. |
+| POST | `/api/organizations/{id}/datasets/{datasetId}/complete` | Encola el perfilado. |
+
+Todas las rutas salvo health requieren `Authorization: Bearer <access_token>` emitido por Supabase Auth. El backend valida ese token antes de consultar datos de la organización.
+
+## Pruebas y calidad
 
 ```bash
-npx prisma migrate dev --name init
+pytest
+ruff check .
 ```
-
-Esto crea las tablas (`users`, `organizations`, `memberships`,
-`refresh_tokens`, `audit_logs`) y regenera el cliente en
-`src/generated/prisma` (ignorado en git, se regenera con `npx prisma
-generate`).
-
-## Correr el backend
-
-```bash
-npm install
-npm run start:dev
-```
-
-Queda escuchando en `http://localhost:3000/api` (prefijo `/api` global).
-Health check: `GET /api/health`.
-
-## Pruebas
-
-```bash
-npm test        # unitarias (vitest)
-npm run test:e2e   # requiere Postgres accesible vía DATABASE_URL
-```
-
-## Endpoints principales
-
-| Método | Ruta | Auth | Descripción |
-| --- | --- | --- | --- |
-| POST | `/api/auth/register` | — | Crea la cuenta y devuelve tokens. |
-| POST | `/api/auth/login` | — | Devuelve access + refresh token. |
-| POST | `/api/auth/refresh` | — | Rota el refresh token. |
-| POST | `/api/auth/logout` | — | Revoca un refresh token. |
-| GET | `/api/auth/me` | Bearer | Perfil del usuario autenticado. |
-| POST | `/api/organizations` | Bearer | Crea una organización (creador = OWNER). |
-| GET | `/api/organizations` | Bearer | Organizaciones del usuario autenticado. |
-| GET | `/api/organizations/:organizationId` | Bearer + membresía | Detalle de la organización. |
-| GET | `/api/organizations/:organizationId/members` | Bearer + membresía | Miembros de la organización. |
-| POST | `/api/organizations/:organizationId/members` | Bearer + rol OWNER/ADMIN | Agrega un usuario existente como miembro. |

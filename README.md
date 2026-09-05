@@ -106,13 +106,13 @@ Entidades transversales: auditoría, permisos, tareas de procesamiento y configu
 
 | Capa | Tecnología | Justificación |
 | --- | --- | --- |
-| Frontend | Next.js (React) + TypeScript | SSR/SSG para carga inicial rápida, buen soporte para dashboards interactivos y mismo lenguaje que el backend. |
-| Backend / API | NestJS (Node.js) + TypeScript | Arquitectura modular por diseño, alineada con los límites de servicio propuestos; comparte tipos con el frontend. |
-| Base transaccional | PostgreSQL | Aislamiento multi-tenant vía row-level security, tipos JSONB para metadatos flexibles y madurez operativa. |
-| Cola y workers de procesamiento | Redis + BullMQ | Procesamiento asíncrono de importación/validación con reintentos, prioridades y observabilidad simples de implementar. |
-| Almacenamiento de objetos | S3 o compatible (MinIO en desarrollo) | Estándar de facto para archivos originales y artefactos generados, con URLs firmadas y acceso temporal. |
+| Frontend | Next.js (React) + TypeScript | SSR/SSG para carga inicial rápida y dashboards interactivos. |
+| Backend / API | Python 3.12 + FastAPI | API tipada, documentación OpenAPI automática y ecosistema natural para procesamiento de datos. |
+| Persistencia | Supabase Postgres + SQLAlchemy + Alembic | PostgreSQL gestionado, modelo de dominio explícito y migraciones versionadas. |
+| Cola y workers de procesamiento | Redis + Celery + Polars | Perfilado y transformación asíncrona de archivos sin bloquear solicitudes HTTP. |
+| Identidad y archivos | Supabase Auth + Supabase Storage | Sesiones gestionadas y objetos privados con URLs firmadas desde el backend. |
 | Capa analítica | PostgreSQL (vistas materializadas) en el MVP; evaluar ClickHouse o DuckDB al escalar | Mantiene el MVP simple sin bloquear una futura migración de solo la capa analítica. |
-| Autenticación | Sesiones basadas en JWT + hashing con Argon2 | Estándar de la industria, evita dependencias externas obligatorias en el MVP. |
+| Autenticación | Supabase Auth + validación Bearer en FastAPI | Un único proveedor de identidad; el backend conserva los permisos multi-tenant. |
 | Infraestructura y entornos | Docker y Docker Compose para desarrollo; despliegue en contenedores | Consistencia entre entornos y portabilidad hacia el proveedor cloud que se elija. |
 
 ## Convenciones de desarrollo
@@ -126,10 +126,10 @@ Entidades transversales: auditoría, permisos, tareas de procesamiento y configu
 
 ## Próximos pasos
 
-1. Validar el stack tecnológico propuesto y afinar los límites de cada módulo.
-2. Diseñar el esquema inicial de identidad, organizaciones y permisos.
-3. Implementar el flujo de autenticación y el modelo multi-tenant.
-4. Construir la primera carga CSV con perfilado básico.
+1. Configurar Supabase Auth, el bucket privado `raw-data` y las variables de entorno del backend.
+2. Aplicar la primera migración de Alembic a Supabase Postgres.
+3. Conectar el frontend a Supabase Auth y a las rutas protegidas de FastAPI.
+4. Completar el worker de perfilado CSV/XLSX con Polars cuando la carga finalice.
 5. Crear el primer dashboard basado en un dataset preparado.
 
 ## Licencia
